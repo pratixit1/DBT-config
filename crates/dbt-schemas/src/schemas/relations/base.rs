@@ -533,11 +533,11 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         // get start/end times
         let (start, end) = run_filter.sample_times();
 
-        // Render with explicit UTC offset so non-UTC sessions (e.g. Snowflake
-        // with a session TIMEZONE other than UTC) interpret the literal as UTC,
-        // matching the microbatch DELETE predicate which also uses `to_rfc3339`.
-        let start = start.map(|t| t.to_rfc3339());
-        let end = end.map(|t| t.to_rfc3339());
+        // Render with explicit UTC offset so non-UTC sessions interpret the
+        // literal as UTC. Use microsecond precision (6 fractional digits) which
+        // is the maximum supported by BigQuery's TIMESTAMP type.
+        let start = start.map(|t| t.format("%Y-%m-%dT%H:%M:%S%.6f%:z").to_string());
+        let end = end.map(|t| t.format("%Y-%m-%dT%H:%M:%S%.6f%:z").to_string());
 
         // render the filter conditions
         let (start, end) = match self.adapter_type() {
@@ -850,5 +850,29 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         _relation_config: &Value,
     ) -> Result<Value, MinijinjaError> {
         unimplemented!("Available only for BigQuery and Redshift")
+    }
+}
+#[cfg(test)]
+mod tests {
+
+    use chrono::{DateTime, Utc};
+
+    #[test]
+    fn test_bigquery_timestamp_precision() {
+        let dt = DateTime::parse_from_rfc3339("2026-06-05T03:50:56.538507786+00:00")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let formatted = dt.format("%Y-%m-%dT%H:%M:%S%.6f%:z").to_string();
+
+        assert!(
+            formatted.contains("538507"),
+            "Expected 6-digit precision in: {}",
+            formatted
+        );
+        assert!(
+            !formatted.contains("538507786"),
+            "Should not contain 9-digit precision"
+        );
     }
 }
