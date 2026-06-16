@@ -12,6 +12,21 @@ from dbt_common.events.functions import fire_event
 from dbt_common.exceptions import DbtInternalError
 from dbt_common.utils import cast_dict_to_dict_of_strings
 
+DUPLICATE_ROW_INDICATORS = (
+    "duplicate row detected during dml action",
+    "update/merge must match at most one source row",
+    "merge statement resulted in multiple rows",
+    "duplicate key value violates unique constraint",
+    "ora-30926",
+)
+
+SNAPSHOT_UNIQUE_KEY_SUGGESTION = (
+    "Suggestion: Ensure your unique_key column(s) are really unique. "
+    "See https://docs.getdbt.com/docs/build/snapshots#ensure-your-unique-key-is-really-unique"
+)
+
+
+
 
 class SnapshotRunner(ModelRunner):
     def describe_node(self) -> str:
@@ -36,6 +51,35 @@ class SnapshotRunner(ModelRunner):
             ),
             level=level,
         )
+
+    def _extract_msg(self, exc: Exception) -> Optional[str]:
+        if getattr(exc, "msg", None) and isinstance(exc.msg, str):
+            return exc.msg
+        if exc.args and isinstance(exc.args[0], str):
+            return exc.args[0]
+        return None
+
+    def _update_exc_msg(self, exc: Exception, new_msg: str) -> None:
+        if hasattr(exc, "msg") and isinstance(exc.msg, str):
+            exc.msg = new_msg
+        else:
+            exc.args = (new_msg, *exc.args[1:])
+
+    def _is_duplicate_row_error(self, msg: str) -> bool:
+        if SNAPSHOT_UNIQUE_KEY_SUGGESTION in msg:
+            return False
+        msg_lower = msg.lower()
+        for indicator in DUPLICATE_ROW_INDICATORS:
+            if indicator in msg_lower:
+                return True
+        return False
+
+    def handle_exception(self, exc: Exception, ctx) -> str:
+        msg = self._extract_msg(exc)
+        if msg and self._is_duplicate_row_error(msg):
+            self._update_exc_msg(exc, f"{msg}\n\n{SNAPSHOT_UNIQUE_KEY_SUGGESTION}")
+
+        return super().handle_exception(exc, ctx)
 
 
 class SnapshotTask(RunTask):
