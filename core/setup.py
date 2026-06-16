@@ -53,7 +53,7 @@ setup(
         "colorama>=0.3.9,<0.4.7",
         "hologram>=0.0.14,<=0.0.15",
         "isodate>=0.6,<0.7",
-        "logbook>=1.5,<1.6",
+        "logbook>=1.5,<1.10",
         "mashumaro[msgpack]==3.3.1",
         "minimal-snowplow-tracker==0.0.2",
         "networkx>=2.3,<2.8.1;python_version<'3.8'",
