@@ -19,7 +19,7 @@ pytest-mock
 pytest-xdist
 pytz
 sphinx
-tox>=3.13
+tox>=4.60.0
 twine
 types-colorama
 types-docutils
